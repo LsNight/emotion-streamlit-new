@@ -1,3 +1,16 @@
+import subprocess
+import sys
+
+def install_package(package):
+    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+
+# 强制安装无GUI版本的OpenCV
+try:
+    import cv2
+except ImportError:
+    install_package("opencv-python-headless")
+    import cv2
+
 """
 多模态情感分析系统 - Streamlit 网页版（复刻 Gradio 布局）
 1:1 还原原界面结构、交互逻辑与视觉体验
