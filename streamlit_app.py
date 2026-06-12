@@ -1,20 +1,3 @@
-import subprocess
-import sys
-import importlib
-
-# 强制安装 opencv-python-headless 并导入
-def install_and_import(package):
-    try:
-        return importlib.import_module(package)
-    except ImportError:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "--quiet", "opencv-python-headless"])
-        return importlib.import_module(package)
-
-cv2 = install_and_import("cv2")
-
-# --- 下面是你原来的代码 ---
-import streamlit as st
-# ... 其他导入和代码
 """
 多模态情感分析系统 - Streamlit 网页版（复刻 Gradio 布局）
 1:1 还原原界面结构、交互逻辑与视觉体验
@@ -22,7 +5,24 @@ import streamlit as st
 import os
 import sys
 import time
-import cv2
+
+# ========= 新增：cv2 容错导入 + 云端环境标记（仅新增，原有代码不动） =========
+IS_STREAMLIT_CLOUD = os.environ.get("STREAMLIT_SERVER_HEADLESS") == "true"
+# 安全导入 cv2，避免云端直接崩溃
+try:
+    import cv2
+    CV_AVAILABLE = True
+except Exception:
+    CV_AVAILABLE = False
+    # 空占位对象，防止后续属性调用报错
+    class DummyCV2:
+        def __getattr__(self, name):
+            def dummy(*args, **kwargs):
+                return None
+            return dummy
+    cv2 = DummyCV2()
+# ==========================================================================
+
 import pandas as pd
 import numpy as np
 from PIL import Image
@@ -310,58 +310,71 @@ with tab2:
     if "last_infer" not in st.session_state:
         st.session_state.last_infer = 0
 
-    if cam_start:
-        st.session_state.cam_active = True
-        if st.session_state.cam is not None:
-            st.session_state.cam.release()
-        st.session_state.cam = _open_camera(0)
-        st.session_state.last_result = None
-        st.session_state.last_infer = 0
-
-    if cam_stop:
+    # ========= 新增：云端/无cv2 拦截判断（原有代码全部缩进进 else，无删减） =========
+    if IS_STREAMLIT_CLOUD or not CV_AVAILABLE:
+        st.warning("⚠️ Streamlit 云端环境不支持本地摄像头，请在本地客户端运行此功能。")
         st.session_state.cam_active = False
         if st.session_state.cam is not None:
-            st.session_state.cam.release()
+            try:
+                st.session_state.cam.release()
+            except:
+                pass
             st.session_state.cam = None
-        cam_output_placeholder.empty()
-        cam_bars_placeholder.empty()
-        cam_status_placeholder.markdown("已停止")
+    else:
+        # 下面一整段【你原来的摄像头逻辑】完全原样保留，未做任何修改
+        if cam_start:
+            st.session_state.cam_active = True
+            if st.session_state.cam is not None:
+                st.session_state.cam.release()
+            st.session_state.cam = _open_camera(0)
+            st.session_state.last_result = None
+            st.session_state.last_infer = 0
 
-    if st.session_state.cam_active and st.session_state.cam is not None and st.session_state.cam.isOpened():
-        ret, frame = st.session_state.cam.read()
-        if ret:
-            frame = cv2.flip(frame, 1)
-            h, w = frame.shape[:2]
+        if cam_stop:
+            st.session_state.cam_active = False
+            if st.session_state.cam is not None:
+                st.session_state.cam.release()
+            st.session_state.cam = None
+            cam_output_placeholder.empty()
+            cam_bars_placeholder.empty()
+            cam_status_placeholder.markdown("已停止")
 
-            now = time.time()
-            if now - st.session_state.last_infer > 2.0:
-                st.session_state.last_infer = now
-                init_detector(w, h)
-                face = find_face(frame)
-                if face is not None:
-                    face_crop = get_face(frame)
-                    r = predict_emotion_from_array(face_crop, pipeline.cv_classifier)
-                    label = f"{r['label_name']} {r['confidence']*100:.0f}%"
-                    st.session_state.last_result = (face, label, r)
-                else:
-                    st.session_state.last_result = None
+        if st.session_state.cam_active and st.session_state.cam is not None and st.session_state.cam.isOpened():
+            ret, frame = st.session_state.cam.read()
+            if ret:
+                frame = cv2.flip(frame, 1)
+                h, w = frame.shape[:2]
 
-            bars = {e:0.0 for e in EMOTIONS_EN}
-            status = "未检测到人脸"
-            if st.session_state.last_result is not None:
-                face, label, r = st.session_state.last_result
-                frame = draw_box(frame, face, label, (0, 255, 0))
-                status = f"**{label}**"
-                bars = {EMOTIONS_EN[i]: r['probabilities'][i] for i in range(7)}
+                now = time.time()
+                if now - st.session_state.last_infer > 2.0:
+                    st.session_state.last_infer = now
+                    init_detector(w, h)
+                    face = find_face(frame)
+                    if face is not None:
+                        face_crop = get_face(frame)
+                        r = predict_emotion_from_array(face_crop, pipeline.cv_classifier)
+                        label = f"{r['label_name']} {r['confidence']*100:.0f}%"
+                        st.session_state.last_result = (face, label, r)
+                    else:
+                        st.session_state.last_result = None
 
-            # 复刻原画面尺寸
-            display = cv2.resize(frame, (640, 360))
-            display_rgb = cv2.cvtColor(display, cv2.COLOR_BGR2RGB)
-            cam_output_placeholder.image(display_rgb, caption="实时画面", use_column_width=True)
-            cam_status_placeholder.markdown(status)
-            with cam_bars_placeholder.container():
-                st.markdown("**全部表情概率**")
-                st.bar_chart(bars, use_container_width=True)
+                bars = {e:0.0 for e in EMOTIONS_EN}
+                status = "未检测到人脸"
+                if st.session_state.last_result is not None:
+                    face, label, r = st.session_state.last_result
+                    frame = draw_box(frame, face, label, (0, 255, 0))
+                    status = f"**{label}**"
+                    bars = {EMOTIONS_EN[i]: r['probabilities'][i] for i in range(7)}
+
+                # 复刻原画面尺寸
+                display = cv2.resize(frame, (640, 360))
+                display_rgb = cv2.cvtColor(display, cv2.COLOR_BGR2RGB)
+                cam_output_placeholder.image(display_rgb, caption="实时画面", use_column_width=True)
+                cam_status_placeholder.markdown(status)
+                with cam_bars_placeholder.container():
+                    st.markdown("**全部表情概率**")
+                    st.bar_chart(bars, use_container_width=True)
+    # ==========================================================================
 
 # ========== 标签3：历史记录（复刻原表格与详情） ==========
 with tab3:
