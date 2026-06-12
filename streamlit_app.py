@@ -4,30 +4,46 @@
 """
 import os
 import sys
-import time
 
-# ========= 新增：cv2 容错导入 + 云端环境标记（仅新增，原有代码不动） =========
+# ===================== 新增：cv2 问题终极补丁（放在所有 import 之前） =====================
+# 1. 标记云环境
 IS_STREAMLIT_CLOUD = os.environ.get("STREAMLIT_SERVER_HEADLESS") == "true"
-# 安全导入 cv2，避免云端直接崩溃
-try:
-    import cv2
-    CV_AVAILABLE = True
-except Exception:
-    CV_AVAILABLE = False
-    # 空占位对象，防止后续属性调用报错
+
+# 2. 如果是云环境，提前屏蔽 cv2 相关路径，避免 config.py 报错
+if IS_STREAMLIT_CLOUD:
+    # 给 cv2 的 config.py 里的变量打补丁，让它不会去找 lib64
+    import builtins
+    real_import = __import__
+
+    def safe_import(name, *args, **kwargs):
+        if name == "cv2.config":
+            # 造一个假的 config 模块，骗过导入
+            class FakeConfig:
+                LOADER_DIR = ""
+            fake_config = FakeConfig()
+            sys.modules["cv2.config"] = fake_config
+            return fake_config
+        return real_import(name, *args, **kwargs)
+
+    builtins.__import__ = safe_import
+
+    # 提前把 cv2 替换成空对象，防止后续所有导入报错
     class DummyCV2:
         def __getattr__(self, name):
             def dummy(*args, **kwargs):
                 return None
             return dummy
-    cv2 = DummyCV2()
-# ==========================================================================
+    sys.modules["cv2"] = DummyCV2()
+    cv2 = sys.modules["cv2"]
+# ========================================================================================
 
+
+import time
 import pandas as pd
 import numpy as np
 from PIL import Image
-
 # 编码兼容
+
 if sys.stdout.encoding != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
