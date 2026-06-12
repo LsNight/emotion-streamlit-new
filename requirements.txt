@@ -13,4 +13,8 @@ opencv-python
 pillow
 numpy
 pandas
-# 保留你项目里原有的所有包（gradio、模型相关依赖等）
+streamlit
+opencv-python
+numpy
+Pillow
+# 其他你用到的库，比如 torch 等
