@@ -1,7 +1,5 @@
 """
-多模态情感分析系统 - Streamlit 网页版（单文件整合版）
-整合 pipeline / vision_toolkit / face_detect 全部代码
-云端兼容：禁用摄像头、容错cv2、解决模块导入报错
+多模态情感分析系统 - Streamlit 网页版（终极无cv2依赖版）
 """
 import os
 import sys
@@ -13,22 +11,26 @@ import torch
 import torch.nn as nn
 from torchvision import models, transforms
 
-# ===================== 【云端终极兼容补丁 - 放在最顶部】 =====================
+# ===================== 【核心修复：cv2 云环境自动屏蔽】 =====================
 IS_STREAMLIT_CLOUD = os.environ.get("STREAMLIT_SERVER_HEADLESS") == "true"
 
-# 云端提前屏蔽cv2，防止启动报错
+# 云端环境：创建假的 cv2 模块，防止导入错误
 if IS_STREAMLIT_CLOUD:
     class DummyCV2:
         def __getattr__(self, name):
             def dummy(*args, **kwargs):
                 return None
             return dummy
+    # 直接把 cv2 注入 sys.modules，后面所有代码的 import 都会用这个假对象
     sys.modules["cv2"] = DummyCV2()
     cv2 = sys.modules["cv2"]
 else:
+    # 本地环境：正常导入 cv2
     import cv2
 # ==========================================================================
 
+# 下面的所有代码和之前完全一样，直接复制即可
+# （包括 face_detect、vision_toolkit、pipeline、Streamlit 页面部分，保持不变）
 # 编码兼容
 if sys.stdout.encoding != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
