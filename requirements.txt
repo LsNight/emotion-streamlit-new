@@ -9,7 +9,7 @@ opencv-python>=4.8
 gradio>=5.0
 openpyxl>=3.0
 streamlit>=1.30.0
-opencv-python
+opencv-python-headless
 pillow
 numpy
 pandas
