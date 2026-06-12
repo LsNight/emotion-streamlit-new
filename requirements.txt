@@ -1,0 +1,16 @@
+torch>=2.0
+torchvision>=0.15
+transformers>=4.30
+pandas>=2.0
+numpy>=1.24
+Pillow>=9.0
+scikit-learn>=1.0
+opencv-python>=4.8
+gradio>=5.0
+openpyxl>=3.0
+streamlit>=1.30.0
+opencv-python
+pillow
+numpy
+pandas
+# 保留你项目里原有的所有包（gradio、模型相关依赖等）
