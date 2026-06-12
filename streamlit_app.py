@@ -201,6 +201,7 @@ class GatedMultimodalFusion(nn.Module):
         return out, alpha
 
 # ===================== 四、pipeline.py 总调度器 =====================
+# 修改 pipeline.py 里的 EmotionAnalysisPipeline 类
 class EmotionAnalysisPipeline:
     def __init__(self, device=None):
         self.device = device or get_device_cfg()
@@ -214,7 +215,11 @@ class EmotionAnalysisPipeline:
 
     def load_cv(self, weight_path=None):
         weight_path = weight_path or CV_WEIGHT_PATH
-        print(f"📷 加载 CV 模型: {os.path.basename(weight_path)}")
+        print(f"📷 尝试加载 CV 模型: {os.path.basename(weight_path)}")
+        # 新增：找不到权重时不报错，仅提示
+        if not os.path.exists(weight_path):
+            print(f"⚠️ CV权重文件不存在，跳过加载，将使用模拟结果")
+            return self
         self.cv_classifier = load_emotion_model(weight_path, self.device, CV_NUM_CLASSES)
         self.cv_extractor = load_feature_extractor(weight_path, self.device, CV_NUM_CLASSES)
         print(f"   CV 特征维度: {CV_FEATURE_DIM}")
@@ -222,7 +227,11 @@ class EmotionAnalysisPipeline:
 
     def load_nlp(self, model_path=None):
         model_path = model_path or NLP_MODEL_PATH
-        print(f"📝 加载 NLP 模型: {os.path.basename(model_path)}")
+        print(f"📝 尝试加载 NLP 模型: {os.path.basename(model_path)}")
+        # 新增：找不到权重时不报错，仅提示
+        if not os.path.exists(model_path):
+            print(f"⚠️ NLP权重文件不存在，跳过加载，将使用模拟结果")
+            return self
         self.nlp_model = load_sentiment_model(model_path, self.device)
         self.nlp_tokenizer = load_tokenizer(model_path)
         self.nlp_extractor = NLPFeatureExtractor(self.nlp_model, self.nlp_tokenizer, self.device)
@@ -239,19 +248,23 @@ class EmotionAnalysisPipeline:
         default_ckpt = os.path.join(os.path.dirname(__file__), "fusion", "fusion_checkpoint.pth")
         if checkpoint_path is None:
             checkpoint_path = default_ckpt
-        if checkpoint_path and os.path.exists(checkpoint_path):
-            print(f"🔗 从 checkpoint 加载融合模型: {os.path.basename(checkpoint_path)}")
-            self.fusion_model.load_state_dict(torch.load(checkpoint_path, map_location=self.device))
-        else:
-            print(f"🔗 初始化融合模型: GatedMultimodalFusion (随机权重)")
+        print(f"🔗 尝试加载融合模型: {os.path.basename(checkpoint_path)}")
+        # 新增：找不到权重时不报错，仅提示
+        if not os.path.exists(checkpoint_path):
+            print(f"⚠️ 融合权重文件不存在，使用随机初始化权重")
+            return self
+        print(f"   从 checkpoint 加载融合模型")
+        self.fusion_model.load_state_dict(torch.load(checkpoint_path, map_location=self.device))
         return self
 
     def load_all(self):
         self.load_cv()
         self.load_nlp()
         self.load_fusion()
-        print("✅ 全部模块加载完成")
+        print("✅ 全部模块加载完成（部分可能为模拟模式）")
         return self
+
+    # 其余 predict_cv_only / predict_nlp_only / predict_fusion 函数保持不变
 
     def predict_cv_only(self, image_path):
         if self.cv_classifier is None:
